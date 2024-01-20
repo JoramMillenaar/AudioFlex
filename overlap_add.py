@@ -6,6 +6,33 @@ from buffer_handlers import SampleBuffer
 
 class OverlapAdd:
     def __init__(self, channels: int, block_size: int, chunk_size: int, time_percentage: float):
+        """
+        Algorithm that exposes the process method to stretch multiple-channel audio by factor of 'time_percentage'
+         1000 samples as input with a time_percentage of 0.8 would result in 800 outputted samples
+        :param channels: Amount of channels expected for the audio processor input
+        :param block_size: Amount of samples to divide the input in to overlap (typically between 64 and 1024)
+        :param chunk_size: Amount of samples per channel expected for the audio processor input
+        :param time_percentage: How much to stretch the input audio by
+
+
+        Visual Explanation attempt (where time_percentage is 1):
+        Every symbol, except for the boundary markers '|', is a sample
+
+        ############   -> Input
+        |          |
+        BBBBBB     |   -> (BBBBBB) is a block (so are the rows below it)
+        |  111222  |   -> (111) & (222) are also represented as 'semi-blocks'
+        |     XXXYYY   -> (XXX) is also named 'current block' where (222) would be the 'summing buffer'
+        |          |
+        ############   -> Output
+
+        The time_percentage only affects where the block is taken from the input.
+
+        This approach iterates over 'semi-blocks', which is half of a block. This semi-block has a consistent
+         'current block' and 'summing buffer', which are summed together after windowing to form the output.
+        When the output is asking for more samples than the semi-block holds, the current semi-block remainder
+         is fetched before updating the block assignments/indices. Then the rest of the samples are fetched recursively.
+        """
         self.block_size = block_size
         self.buffer = SampleBuffer(channels=channels, max_history=self.block_size * 2)
         self.channels = channels
@@ -41,6 +68,14 @@ class OverlapAdd:
         return np.sum((cur, add), axis=0)
 
     def _take(self, samples: int):
+        """
+        Either:
+            - Simply take from the current semi-block if the semi-block has enough samples left
+            - If the block has been exhausted; update the block positions (and buffers) and try again (recurse)
+            - If we need more samples than the block holds, first get the blocks remainder, then get the rest (recurse)
+        :param samples: Amount of samples that should be outputted
+        :return: An audio chunk of length 'samples'
+        """
         if self.semi_block_index + samples <= self.semi_block_samples:
             return self._take_from_semi_block(samples)
         elif self.semi_block_index == self.semi_block_samples:
@@ -62,6 +97,13 @@ class OverlapAdd:
         return chunk * window_slice
 
     def process(self, audio_chunk):
+        """
+        Stretch the duration of the given 'audio_chunk' by the factor of the instance's given time_percentage
+         without altering the pitch
+        :param audio_chunk: Multiple-channel audio data to stretch in duration.
+            The shape should equal: (instance's channels, instance's chunk_size)
+        :return: Stretched audio data (chunk_size will be altered by a factor of the instance's time_percentage)
+        """
         self.buffer.push(audio_chunk)
         if self._buffer_full_enough:
             return self._take(self.output_samples)
