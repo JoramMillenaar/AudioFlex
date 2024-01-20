@@ -61,10 +61,11 @@ class OverlapAdd:
         cur = self.buffer.get_slice(start=self.input_block_index, end=self.input_block_index + samples)
         add = self.buffer.get_slice(start=self.sum_buffer_index, end=self.sum_buffer_index + samples)
 
-        length = min(cur.shape[1], add.shape[1])  # Due to rounding errors some buffers might be off by one or two
+        length = min(cur.shape[1], add.shape[1])  # Due to rounding one of the buffers might be off by one sample
         cur = self._apply_window(cur[:, :length], window_start=self.semi_block_index)
         add = self._apply_window(add[:, :length], window_start=self.semi_block_samples + self.semi_block_index)
         self._increment_indices(length)
+        self._process_current_block(cur)
         return np.sum((cur, add), axis=0)
 
     def _take(self, samples: int):
@@ -109,3 +110,6 @@ class OverlapAdd:
             return self._take(self.output_samples)
         else:
             return np.zeros((self.channels, self.output_samples), dtype=np.float32)
+
+    def _process_current_block(self, chunk):
+        return chunk
