@@ -1,17 +1,16 @@
 import numpy as np
 from numpy._typing import NDArray
 
-from buffer_handlers import SampleBuffer
+from audioflex.buffer_handlers import SampleBuffer
 
 
 class OverlapAdd:
-    def __init__(self, channels: int, block_size: int, chunk_size: int, time_percentage: float):
+    def __init__(self, channels: int, block_size: int, time_percentage: float):
         """
         Algorithm that exposes the process method to stretch multiple-channel audio by factor of 'time_percentage'
          1000 samples as input with a time_percentage of 0.8 would result in 800 outputted samples
         :param channels: Amount of channels expected for the audio processor input
         :param block_size: Amount of samples to divide the input in to overlap (typically between 64 and 1024)
-        :param chunk_size: Amount of samples per channel expected for the audio processor input
         :param time_percentage: How much to stretch the input audio by
 
 
@@ -37,7 +36,6 @@ class OverlapAdd:
         self.buffer = SampleBuffer(channels=channels, max_history=self.block_size * 2)
         self.channels = channels
         self.inv_time_factor = time_percentage
-        self.output_samples = int(np.round(chunk_size * (1 / self.inv_time_factor)))
         self.window = np.hanning(self.block_size)
         self.window = np.array(channels * [self.window], dtype=np.float32)
 
@@ -46,18 +44,23 @@ class OverlapAdd:
         self.input_block_index = 0
         self.sum_buffer_index = 0
         self.output_index = 0
+        self.chunk_size = 0
 
     @property
     def _buffer_full_enough(self) -> bool:
         return len(self.buffer) >= self.output_samples
 
-    def _increment_indices(self, length):
+    @property
+    def output_samples(self):
+        return int(np.round(self.chunk_size * (1 / self.inv_time_factor)))
+
+    def _increment_indices(self, length: int):
         self.input_block_index += length
         self.sum_buffer_index += length
         self.output_index += length
         self.semi_block_index += length
 
-    def _take_from_semi_block(self, samples: int):
+    def _take_from_semi_block(self, samples: int) -> NDArray:
         cur = self.buffer.get_slice(start=self.input_block_index, end=self.input_block_index + samples)
         add = self.buffer.get_slice(start=self.sum_buffer_index, end=self.sum_buffer_index + samples)
 
@@ -68,7 +71,7 @@ class OverlapAdd:
         self._process_current_block(cur)
         return np.sum((cur, add), axis=0)
 
-    def _take(self, samples: int):
+    def _take(self, samples: int) -> NDArray:
         """
         Either:
             - Simply take from the current semi-block if the semi-block has enough samples left
@@ -92,12 +95,12 @@ class OverlapAdd:
         self.input_block_index = int(round(self.output_index * self.inv_time_factor))
         self.semi_block_index = 0
 
-    def _apply_window(self, chunk: NDArray, window_start: int):
+    def _apply_window(self, chunk: NDArray, window_start: int) -> NDArray:
         window_end = window_start + chunk.shape[1]
         window_slice = self.window[:, window_start:window_end]
         return chunk * window_slice
 
-    def process(self, audio_chunk):
+    def process(self, audio_chunk: NDArray) -> NDArray:
         """
         Stretch the duration of the given 'audio_chunk' by the factor of the instance's given time_percentage
          without altering the pitch
@@ -105,6 +108,7 @@ class OverlapAdd:
             The shape should equal: (instance's channels, instance's chunk_size)
         :return: Stretched audio data (chunk_size will be altered by a factor of the instance's time_percentage)
         """
+        self.chunk_size = audio_chunk.shape[1]
         self.buffer.push(audio_chunk)
         if self._buffer_full_enough:
             return self._take(self.output_samples)
