@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.signal import correlate
 
-from overlap_add import OverlapAdd
+from audioflex.overlap_add import OverlapAdd
 
 
 class WSOLA(OverlapAdd):
