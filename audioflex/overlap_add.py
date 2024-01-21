@@ -6,10 +6,10 @@ from audioflex.buffer_handlers import Buffer
 
 class OverlapAdd:
     """
-    Algorithm that exposes the process method to stretch multiple-channel audio by factor of 'time_percentage'
+    Algorithm that exposes the pull method to stretch multiple-channel audio by factor of 'time_percentage'
      1000 samples as input with a time_percentage of 0.8 would result in 800 outputted samples
     :param input_buffer: Buffer to take the input samples of (An interface with 'get_slice' method)
-    :param channels: Amount of channels expected for the audio processor input
+    :param channels: Amount of channels expected in the input
     :param block_size: Amount of samples to divide the input in to overlap (typically between 64 and 1024)
 
 
