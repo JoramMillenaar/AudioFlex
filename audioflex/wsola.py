@@ -2,19 +2,20 @@ import numpy as np
 from numpy._typing import NDArray
 from scipy.signal import correlate
 
+from audioflex.buffer_handlers import Buffer
 from audioflex.overlap_add import OverlapAdd
 
 
 class WSOLA(OverlapAdd):
-    def __init__(self, channels: int, block_size: int, time_percentage: float, search_window: int):
+    def __init__(self, input_buffer: Buffer, block_size: int, channels: int, search_window: int):
         """
         WSOLA algorithm for timescale modification of audio signals without affecting pitch.
+        :param input_buffer: Buffer to take the input samples of (An interface with 'get_slice' method)
         :param channels: Amount of channels expected for the audio processor input
         :param block_size: Amount of samples to divide the input in to overlap
-        :param time_percentage: How much to stretch the input audio by
         :param search_window: Size of the search window to find the best overlap position
         """
-        super().__init__(channels, block_size, time_percentage)
+        super().__init__(input_buffer, block_size, channels)
         self.search_window = search_window
         self.previous_block = None
 

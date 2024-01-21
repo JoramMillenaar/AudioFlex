@@ -1,7 +1,14 @@
+from typing import Iterable, Protocol
+
 import numpy as np
 
 
-class SampleBuffer:
+class Buffer(Protocol):
+    def get_slice(self, start: int, end: int) -> np.ndarray:
+        pass
+
+
+class CircularBuffer(Buffer):
     def __init__(self, channels: int, max_history: int):
         self.channels = channels
         self.max_history = max_history
@@ -35,3 +42,24 @@ class SampleBuffer:
 
         self.current_position = end_position
         self.total_samples += chunk_length
+
+
+class BufferedInput(Buffer):
+    def __init__(self, max_history: int, audio_input: Iterable[np.ndarray], channels: int):
+        self.audio_input = iter(audio_input)
+        self.circular_buffer = CircularBuffer(channels=channels, max_history=max_history)
+
+    def _fetch_and_store(self, required_samples: int):
+        while required_samples > 0:
+            try:
+                chunk = next(self.audio_input)
+                self.circular_buffer.push(chunk)
+                required_samples -= chunk.shape[1]
+            except StopIteration:
+                break  # No more data available from the input
+
+    def get_slice(self, start: int, end: int) -> np.ndarray:
+        total_samples = self.circular_buffer.total_samples
+        if end > total_samples:
+            self._fetch_and_store(end - total_samples)
+        return self.circular_buffer.get_slice(start, end)
