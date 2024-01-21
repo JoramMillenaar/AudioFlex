@@ -6,7 +6,7 @@ with open('README.md') as file:
 setup(
     name='AudioFlex',
     description='A Pure Python Suite of Algorithms to Stretch Audio Duration without Affecting Pitch',
-    version='0.0.4',
+    version='0.0.5',
     author='Joram Millenaar',
     author_email='joormillenaar@live.nl',
     url='https://github.com/jofoks/AudioFlex',

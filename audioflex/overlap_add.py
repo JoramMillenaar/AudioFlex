@@ -1,14 +1,15 @@
 import numpy as np
 from numpy._typing import NDArray
 
-from audioflex.buffer_handlers import Buffer
+from audioflex.protocols import SliceableArray
 
 
 class OverlapAdd:
     """
     Algorithm that exposes the pull method to stretch multiple-channel audio by factor of 'time_percentage'
      1000 samples as input with a time_percentage of 0.8 would result in 800 outputted samples
-    :param input_buffer: Buffer to take the input samples of (An interface with 'get_slice' method)
+    :param input_buffer: Input to take slice input samples off.
+        See AudioIO's (https://github.com/jofoks/AudioIO) buffers to convert audio input into a realtime slicable buffer
     :param channels: Amount of channels expected in the input
     :param block_size: Amount of samples to divide the input in to overlap (typically between 64 and 1024)
 
@@ -32,10 +33,10 @@ class OverlapAdd:
      is fetched before updating the block assignments/indices. Then the rest of the samples are fetched recursively.
     """
 
-    def __init__(self, input_buffer: Buffer, block_size: int, channels: int):
+    def __init__(self, input_buffer: SliceableArray, block_size: int, channels: int):
         self.block_size = block_size
         self.channels = channels
-        self.buffer = input_buffer
+        self.input_buffer = input_buffer
         self.window = np.hanning(self.block_size)
         self.window = np.array(channels * [self.window], dtype=np.float32)
         self.inv_time_factor = 1
@@ -58,14 +59,17 @@ class OverlapAdd:
         self._output_index += samples
         self._semi_block_index += samples
 
-    def _take_from_semi_block(self, samples: int) -> NDArray:
-        cur = self.buffer.get_slice(start=self._input_block_index, end=self._input_block_index + samples)
-        add = self.buffer.get_slice(start=self._sum_buffer_index, end=self._sum_buffer_index + samples)
+    def _get_window_slice(self, length: int, window_start: int) -> NDArray:
+        return self.window[:, window_start:window_start + length]
 
-        length = min(cur.shape[1], add.shape[1])  # Due to rounding one of the buffers might be off by one sample
-        cur = self._apply_window(cur[:, :length], window_start=self._semi_block_index)
-        add = self._apply_window(add[:, :length], window_start=self._semi_block_samples + self._semi_block_index)
-        self._increment_indices(length)
+    def _take_from_semi_block(self, samples: int) -> NDArray:
+        window_slice = self._get_window_slice(samples, window_start=self._semi_block_index)
+        cur = self.input_buffer[self._input_block_index: self._input_block_index + samples] * window_slice
+
+        window_slice = self._get_window_slice(samples, window_start=self._semi_block_samples + self._semi_block_index)
+        add = self.input_buffer[self._sum_buffer_index: self._sum_buffer_index + samples] * window_slice
+
+        self._increment_indices(samples)
         self._process_current_block(cur)
         return np.sum((cur, add), axis=0)
 
@@ -93,10 +97,8 @@ class OverlapAdd:
         self._input_block_index = int(round(self._output_index * self.inv_time_factor))
         self._semi_block_index = 0
 
-    def _apply_window(self, chunk: NDArray, window_start: int) -> NDArray:
-        window_end = window_start + chunk.shape[1]
-        window_slice = self.window[:, window_start:window_end]
-        return chunk * window_slice
-
-    def _process_current_block(self, chunk):
-        return chunk
+    def _process_current_block(self, audio_chunk: np.ndarray):
+        """
+        A hook to perform any processing to the current block's audio chunk for a subclass to implement
+        """
+        return audio_chunk

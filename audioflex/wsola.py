@@ -1,13 +1,14 @@
 import numpy as np
+from AudioIO.buffers import Buffer
 from numpy._typing import NDArray
 from scipy.signal import correlate
 
-from audioflex.buffer_handlers import Buffer
 from audioflex.overlap_add import OverlapAdd
+from audioflex.protocols import SliceableArray
 
 
 class WSOLA(OverlapAdd):
-    def __init__(self, input_buffer: Buffer, block_size: int, channels: int, search_window: int):
+    def __init__(self, input_buffer: SliceableArray, block_size: int, channels: int, search_window: int):
         """
         WSOLA algorithm for timescale modification of audio signals without affecting pitch.
         :param input_buffer: Buffer to take the input samples of (An interface with 'get_slice' method)
