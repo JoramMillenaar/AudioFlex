@@ -11,7 +11,7 @@ class OverlapAdd:
         self.channels = channels
         self.block_size = block_size
 
-        self.window = np.hanning(self.block_size)
+        self.window = np.kaiser(self.block_size, beta=6)
         self.window = np.array(channels * [self.window], dtype=np.float32)
         self.bottom_window, self.top_window = np.split(self.window, 2, axis=1)
         self.buffer = CircularBuffer(channels=channels, max_history=chunk_size + block_size)
