@@ -1,2 +1,3 @@
 numpy~=1.26.3
 scipy~=1.11.4
+AudioIO @ git+https://github.com/jofoks/AudioIO@master
