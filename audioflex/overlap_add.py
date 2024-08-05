@@ -1,5 +1,7 @@
+from typing import Iterable
+
 import numpy as np
-from AudioIO.buffers import CircularBuffer
+from AudioIO.buffers import CircularBuffer, NotEnoughSamples
 
 SemiBlockPairs = list[tuple[np.ndarray, np.ndarray]]
 
@@ -14,47 +16,56 @@ class OverlapAdd:
         self.window = np.kaiser(self.block_size, beta=6)
         self.window = np.array(channels * [self.window], dtype=np.float32)
         self.bottom_window, self.top_window = np.split(self.window, 2, axis=1)
-        self.buffer = CircularBuffer(channels=channels, max_history=chunk_size + block_size)
-        self.last_semi_block = np.zeros((channels, block_size // 2), dtype=np.float32)
-        self.buffer.push(self.last_semi_block)
+        self.buffer = CircularBuffer(channels=channels, max_history=chunk_size + block_size * 2)
+        self.previous_block = np.zeros((channels, block_size), dtype=np.float32)
+        self.buffer.push(self.previous_block)
+        self.overlap_factor = 2
 
-        self.input_block_index = 0
+        self.input_pointer = 0
         self.rate = 1
 
-    def get_sample_offset(self) -> int:
+    def get_stretch_offset(self) -> int:
+        """Returns by how many samples the block needs to be shifted by to stretch the audio according to the rate"""
         if 0 >= self.rate > 2:
             raise ValueError("Rate must be between zero and 2")
         return int((self.block_size // 2) * (self.rate - 1))
 
-    @property
-    def current_block(self) -> np.ndarray:
-        return self.buffer[self.input_block_index:self.input_block_index + self.block_size]
+    def get_overlap_offset(self) -> int:
+        return self.block_size // self.overlap_factor
 
-    @staticmethod
-    def get_semi_block_pairs(blocks: list[np.ndarray], last_semi_block: np.ndarray) -> (SemiBlockPairs, np.ndarray):
-        pairs = []
-        for block in blocks:
-            left, right = np.split(block, 2, axis=1)
-            pairs.append((left, last_semi_block))
-            last_semi_block = right
-        return pairs, last_semi_block
+    def get_default_offset(self):
+        return self.get_overlap_offset() + self.get_stretch_offset()
+
+    def get_block_from_input(self, input_index: int):
+        return self.buffer[input_index:input_index + self.block_size]
 
     def process(self, audio_chunk, rate: float = 1):
         self.buffer.push(audio_chunk)
         self.rate = rate
-        return self.get_output()
+        windowed_blocks = (block * self.window for block in self.fetch_blocks())
+        return self.overlap_add_blocks(blocks=windowed_blocks)
 
-    def get_blocks(self) -> list[np.ndarray]:
-        blocks = []
-        while self.input_block_index + self.block_size <= self.buffer.pushed_samples:
-            blocks.append(self.current_block)
-            self.input_block_index += self.get_sample_offset() + self.block_size // 2
-        return blocks
+    def get_block_offset(self, block) -> int:
+        return self.block_size // self.overlap_factor
 
-    def get_output(self):
-        blocks = self.get_blocks()
-        semi_block_pairs, self.last_semi_block = self.get_semi_block_pairs(blocks, self.last_semi_block)
-        semi_block_pairs = [(a * self.bottom_window, b * self.top_window) for a, b in semi_block_pairs]
-        output_semi_blocks = [np.sum((a, b), axis=0) for a, b in semi_block_pairs]
-        output = np.concatenate(output_semi_blocks, axis=1)
-        return output
+    def fetch_blocks(self):
+        while True:
+            try:
+                yield self.get_block_from_input(self.input_pointer)
+            except NotEnoughSamples:
+                return
+            self.input_pointer += self.get_default_offset()
+
+    def overlap_add_block(self, block: np.ndarray, offset: int) -> np.ndarray:
+        s = np.sum((self.previous_block[:, offset:], block[:, :-offset]), axis=0)
+        return np.concatenate((self.previous_block[:, :offset], s, block[:, -offset:]), axis=1)
+
+    def overlap_add_blocks(self, blocks: Iterable[np.ndarray]) -> np.ndarray:
+        for block in blocks:
+            offset = self.get_block_offset(block)
+            buffer = self.overlap_add_block(block, offset)
+            self.previous_block = buffer[:, -self.block_size:]
+
+        cutoff = self.block_size // 2
+        r = buffer[:, cutoff:-cutoff]
+        return r

@@ -8,6 +8,22 @@
 ## Introduction
 Welcome to AudioFlex, a comprehensive Python library dedicated to audio stretching and manipulation. This project stems from a gap I found in the realm of audio processing tools – the lack of a pure Python library for intricate audio stretching algorithms. AudioFlex is developed to demystify the complexities often shrouded by extensive C++ implementations, making these algorithms accessible and understandable to a broader audience.
 
+## Example
+```python
+from AudioIO.input_streams import SineWaveStream
+from AudioIO.output_streams import AudioPlaybackProcessor
+from audioflex.wsola import WSOLA
+
+
+sound = SineWaveStream(150, 1, chunk_size=1024, channels=2)
+wsola = WSOLA(channels=sound.channels, chunk_size=sound.chunk_size, block_size=512, search_range=128)
+speaker = AudioPlaybackProcessor(sound.chunk_size, sound.sample_rate, channels=2)
+for chunk in sound.iterable():
+    chunk = wsola.process(chunk, rate=1)
+    speaker.process(chunk)
+
+```
+
 ## Motivation
 The inspiration for AudioFlex originated from the need for a Python-centric approach to audio stretching. Existing solutions heavily rely on C++ code, creating a barrier for those seeking to understand the underlying mechanics. This project aims to simplify this process, offering a suite of algorithms in Python that are both educational and functional.
 In the future I want to create some music software / instruments using these algorithms.
