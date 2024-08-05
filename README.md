@@ -16,7 +16,7 @@ from audioflex.wsola import WSOLA
 
 
 sound = SineWaveStream(150, 1, chunk_size=1024, channels=2)
-wsola = WSOLA(channels=sound.channels, chunk_size=sound.chunk_size, block_size=512, search_range=128)
+wsola = WSOLA(channels=sound.channels, chunk_size=sound.chunk_size, frame_size=512, search_range=128)
 speaker = AudioPlaybackProcessor(sound.chunk_size, sound.sample_rate, channels=2)
 for chunk in sound.iterable():
     chunk = wsola.process(chunk, rate=1)
