@@ -56,9 +56,9 @@ class OverlapAdd:
             self.current_position += self.hop_distance
 
     def overlap_add_frames(self, frames: Iterable[np.ndarray]) -> np.ndarray:
+        buffer = self.last_frame
         for frame in frames:
             offset = self.get_frame_offset(audio=self.last_frame, frame=frame)
-            buffer = overlap_add(audio=self.last_frame, frame=frame, offset=offset)
+            buffer = overlap_add(audio=buffer, frame=frame, offset=offset)
             self.last_frame = buffer[:, -self.frame_size:]
-
-        return buffer[:, self.hop_size:-self.hop_size]
+        return buffer[:, self.hop_size: -self.hop_size]

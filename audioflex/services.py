@@ -9,5 +9,5 @@ def overlap_add(audio: np.ndarray, frame: np.ndarray, offset: int) -> np.ndarray
     :param offset: Amount of samples that 'frame' should overlap unto the end of 'audio'
     :return: Extended 'audio'
     """
-    summed_overlap = np.sum((audio[:, offset:], frame[:, :-offset]), axis=0)
-    return np.concatenate((audio[:, :offset], summed_overlap, frame[:, -offset:]), axis=1)
+    summed_overlap = audio[:, -offset:] + frame[:, :offset]
+    return np.concatenate((audio[:, :-offset], summed_overlap, frame[:, offset:]), axis=1)
