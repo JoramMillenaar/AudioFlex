@@ -20,9 +20,8 @@ class OverlapAdd:
         self.buffer = CircularBuffer(channels=channels, max_history=chunk_size + frame_size * 2)
         self.last_frame = np.zeros((channels, frame_size), dtype=np.float32)
         self.buffer.push(self.last_frame)
-        self.overlap_factor = 2
 
-        self.current_position = 0
+        self.input_position = 0
 
     def hop_distance(self, stretch_factor: float):
         return self.hop_size + self.get_stretch_offset(stretch_factor)
@@ -47,10 +46,10 @@ class OverlapAdd:
     def fetch_frames(self, stretch_factor: float):
         while True:
             try:
-                yield self.fetch_frame(start_position=self.current_position)
+                yield self.fetch_frame(start_position=self.input_position)
             except NotEnoughSamples:
                 return
-            self.current_position += self.hop_distance(stretch_factor)
+            self.input_position += self.hop_distance(stretch_factor)
 
     def overlap_add_frames(self, frames: Iterable[np.ndarray]) -> np.ndarray:
         buffer = self.last_frame
