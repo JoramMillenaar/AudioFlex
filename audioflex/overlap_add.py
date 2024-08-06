@@ -23,37 +23,34 @@ class OverlapAdd:
         self.overlap_factor = 2
 
         self.current_position = 0
-        self.rate = 1
 
-    @property
-    def hop_distance(self):
-        return self.hop_size + self.get_stretch_offset()
+    def hop_distance(self, stretch_factor: float):
+        return self.hop_size + self.get_stretch_offset(stretch_factor)
 
-    def get_stretch_offset(self) -> int:
-        """Returns by how many samples the frame needs to be shifted by to stretch the audio according to the rate"""
-        if 0 >= self.rate > 2:
-            raise ValueError("Rate must be between zero and 2")
-        return int(self.hop_size * (self.rate - 1))
+    def get_stretch_offset(self, stretch_factor: float) -> int:
+        """Returns number of samples the frame needs to shift to stretch the audio according to the stretch_factor"""
+        if 0 >= stretch_factor > 2:
+            raise ValueError("stretch_factor must be between zero and 2")
+        return int(self.hop_size * (stretch_factor - 1))
 
     def fetch_frame(self, start_position: int):
         return self.buffer[start_position:start_position + self.frame_size]
 
-    def process(self, audio_chunk, rate: float = 1):
+    def process(self, audio_chunk: np.ndarray, stretch_factor: float = 1):
         self.buffer.push(audio_chunk)
-        self.rate = rate
-        windowed_frames = (frame * self.window for frame in self.fetch_frames())
+        windowed_frames = (frame * self.window for frame in self.fetch_frames(stretch_factor))
         return self.overlap_add_frames(frames=windowed_frames)
 
     def get_frame_offset(self, audio: np.ndarray, frame: np.ndarray) -> int:
         return self.hop_size
 
-    def fetch_frames(self):
+    def fetch_frames(self, stretch_factor: float):
         while True:
             try:
                 yield self.fetch_frame(start_position=self.current_position)
             except NotEnoughSamples:
                 return
-            self.current_position += self.hop_distance
+            self.current_position += self.hop_distance(stretch_factor)
 
     def overlap_add_frames(self, frames: Iterable[np.ndarray]) -> np.ndarray:
         buffer = self.last_frame
