@@ -27,7 +27,7 @@ class OverlapAdd:
             raise ValueError("stretch_factor must be between zero and 2")
         return int(self.hop_size * (stretch_factor - 1))
 
-    def get_frame_offset(self, audio: np.ndarray, frame: np.ndarray) -> int:
+    def compute_frame_offset(self, audio: np.ndarray, frame: np.ndarray) -> int:
         return self.hop_size
 
     def to_frames(self, audio_chunk: np.ndarray, hop_distance: float) -> Iterable[np.ndarray]:
@@ -43,7 +43,7 @@ class OverlapAdd:
     def overlap_add_frames(self, frames: Iterable[np.ndarray]) -> np.ndarray:
         buffer = self.last_frame
         for frame in frames:
-            offset = self.get_frame_offset(audio=self.last_frame, frame=frame)
+            offset = self.compute_frame_offset(audio=self.last_frame, frame=frame)
             buffer = overlap_add(audio=buffer, frame=frame * self.window, offset=offset)
             self.last_frame = buffer[:, -self.frame_size:]
         return buffer[:, self.hop_size: -self.hop_size]

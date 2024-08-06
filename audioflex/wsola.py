@@ -9,6 +9,6 @@ class WSOLA(OverlapAdd):
         super().__init__(channels, chunk_size, frame_size)
         self.phase_aligner = PointBiasPhaseAligner(0.5, preferred_offset=self.hop_size)
 
-    def get_frame_offset(self, audio: np.ndarray, frame: np.ndarray) -> int:
+    def compute_frame_offset(self, audio: np.ndarray, frame: np.ndarray) -> int:
         adjustment = self.phase_aligner.get_closest_alignment_offset(self.last_frame[0], frame[0])
         return adjustment or self.hop_size

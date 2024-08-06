@@ -15,14 +15,21 @@ class PointBiasPhaseAligner(PhaseAligner):
         self.preferred_offset = preferred_offset
 
     def get_bias_window(self, length: int):
-        return np.bartlett(length)
+        index_array = np.arange(length)
+        if self.point_bias_factor == 0:
+            std_dev = length
+        else:
+            std_dev = 1 / self.point_bias_factor
+
+        bias_window = np.exp(-0.5 * ((index_array - self.preferred_offset) / std_dev) ** 2)
+        bias_window /= np.max(bias_window)
+        return bias_window
 
     def get_closest_alignment_offset(self, a: np.ndarray, b: np.ndarray) -> int | None:
         correlation = correlate(a, b, mode='same')
         if not correlation.any():
             return  # No correlations
 
-        # Generate a bias array centered around the preferred_offset
         bias = self.get_bias_window(len(correlation))
 
         biased_correlation = correlation * bias
