@@ -11,16 +11,21 @@ Welcome to AudioFlex, a comprehensive Python library dedicated to audio stretchi
 ## Example
 
 ```python
-from AudioIO.input_streams import WAVFileReadStream
-from AudioIO.output_streams import AudioPlaybackProcessor
+import soundfile as sf  # Example dependency for reading and writing audio
 from audioflex.wsola import WSOLA
 
-sound = WAVFileReadStream('/path/to/your/audio.wav', chunk_size=1024)
-wsola = WSOLA(channels=sound.channels, chunk_size=sound.chunk_size, frame_size=512)
-speaker = AudioPlaybackProcessor(sound.chunk_size, sound.sample_rate, channels=2)
-for chunk in sound.iterable():
-    chunk = wsola.process(chunk, stretch_factor=2)
-    speaker.process(chunk)
+chunk_size = 1024
+frame_size = 512
+sound_path = 'path/to/input/sound.wav'
+output_path = 'path/to/output/file.wav'
+
+with sf.SoundFile(sound_path) as sound, \
+        sf.SoundFile(output_path, 'w', samplerate=sound.samplerate, channels=sound.channels) as output:
+    wsola = WSOLA(channels=sound.channels, chunk_size=chunk_size, frame_size=frame_size)
+    while True:
+        frame = sound.read(frames=chunk_size, dtype='float32').T
+        processed_chunk = wsola.process(frame, stretch_factor=0.7)
+        output.write(processed_chunk.T)
 ```
 
 ## Motivation

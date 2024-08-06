@@ -1,7 +1,6 @@
 from typing import Iterable
 
 import numpy as np
-from AudioIO.buffers import CircularBuffer, NotEnoughSamples
 
 from audioflex.services import overlap_add
 
@@ -16,14 +15,10 @@ class OverlapAdd:
 
         self.window = np.kaiser(self.frame_size, beta=6)
         self.window = np.array(channels * [self.window], dtype=np.float32)
-        self.bottom_window, self.top_window = np.split(self.window, 2, axis=1)
-        self.buffer = CircularBuffer(channels=channels, max_history=chunk_size + frame_size * 2)
         self.last_frame = np.zeros((channels, frame_size), dtype=np.float32)
-        self.buffer.push(self.last_frame)
+        self.leftover_samples = np.ndarray((channels, 0), dtype=np.float32)
 
-        self.input_position = 0
-
-    def hop_distance(self, stretch_factor: float):
+    def get_hop_distance(self, stretch_factor: float):
         return self.hop_size + self.get_stretch_offset(stretch_factor)
 
     def get_stretch_offset(self, stretch_factor: float) -> int:
@@ -32,24 +27,23 @@ class OverlapAdd:
             raise ValueError("stretch_factor must be between zero and 2")
         return int(self.hop_size * (stretch_factor - 1))
 
-    def fetch_frame(self, start_position: int):
-        return self.buffer[start_position:start_position + self.frame_size]
-
     def process(self, audio_chunk: np.ndarray, stretch_factor: float = 1):
-        self.buffer.push(audio_chunk)
-        windowed_frames = (frame * self.window for frame in self.fetch_frames(stretch_factor))
+        hop_distance = self.get_hop_distance(stretch_factor)
+        windowed_frames = (frame * self.window for frame in self.to_frames(audio_chunk, hop_distance))
         return self.overlap_add_frames(frames=windowed_frames)
 
     def get_frame_offset(self, audio: np.ndarray, frame: np.ndarray) -> int:
         return self.hop_size
 
-    def fetch_frames(self, stretch_factor: float):
-        while True:
-            try:
-                yield self.fetch_frame(start_position=self.input_position)
-            except NotEnoughSamples:
-                return
-            self.input_position += self.hop_distance(stretch_factor)
+    def to_frames(self, audio_chunk: np.ndarray, hop_distance: float) -> Iterable[np.ndarray]:
+        audio_chunk = np.concatenate((self.leftover_samples, audio_chunk), axis=1)
+
+        current_position = 0
+        while current_position + self.frame_size < self.chunk_size:
+            yield audio_chunk[:, current_position:current_position + self.frame_size]
+            current_position += hop_distance
+
+        self.leftover_samples = audio_chunk[:, current_position:]
 
     def overlap_add_frames(self, frames: Iterable[np.ndarray]) -> np.ndarray:
         buffer = self.last_frame
